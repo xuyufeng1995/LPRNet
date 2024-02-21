@@ -14,7 +14,7 @@ from tqdm import tqdm
 from data.ccpd import load_dataset
 from model.lprnet import LPRNet, CHARS
 from test import test
-from utils.general import increment_dir, plot_images, model_info, set_logging, MultiModelWrapper, \
+from utils.general import increment_dir, plot_images, model_info, set_logging, \
     sparse_tuple_for_ctc, select_device
 
 logger = logging.getLogger(__name__)
@@ -30,7 +30,7 @@ def main(opts):
     logger.info('Use device %s.' % device)
 
     # 定义网络
-    model = LPRNet(class_num=len(CHARS), dropout_rate=opts.lpr_dropout_rate).to(device)
+    model = LPRNet(class_num=len(CHARS), dropout_rate=opts.dropout_rate).to(device)
     model_info(model)
     logger.info("Build network is successful.")
 
@@ -85,6 +85,7 @@ def main(opts):
         # Print
         logger.info('Load checkpoint completed.')
 
+    # DP模式
     # if device.type != 'cpu' and torch.cuda.device_count() > 1:
     #     model = torch.nn.DataParallel(model)
 
@@ -92,7 +93,7 @@ def main(opts):
     train_dataset, test_dataset = load_dataset(args.source_dir, args.cache_dir, opts.img_size)
     train_loader = DataLoader(train_dataset, batch_size=opts.batch_size, shuffle=True, num_workers=opts.workers,
                               pin_memory=cuda, collate_fn=train_dataset.collate_fn)
-    test_loader = DataLoader(test_dataset, batch_size=opts.test_batch_size, shuffle=False, num_workers=opts.workers,
+    test_loader = DataLoader(test_dataset, batch_size=opts.batch_size, shuffle=False, num_workers=opts.workers,
                              pin_memory=cuda, collate_fn=test_dataset.collate_fn)
 
     # 设置已经进行的轮数
@@ -141,18 +142,12 @@ def main(opts):
             # tb
             if epoch <= 3 and i < 3:
                 if epoch == 1 and i == 0:
-                    tb_writer.add_graph(MultiModelWrapper([model]), imgs)  # add model to tensorboard
+                    tb_writer.add_graph(model(imgs))  # add model to tensorboard
 
                 f = os.path.join(opts.out_dir, 'train_batch_%d_%d.jpg' % (epoch, i))  # filename
                 result = plot_images(images=imgs, fname=f)
                 if result is not None:
                     tb_writer.add_image(f, result, dataformats='HWC', global_step=epoch)
-
-            # if i == 0 and opts.tb_st:
-            #     f = os.path.join(opts.out_dir, 'train_batch_st_%d.jpg' % epoch)  # filename
-            #     result = plot_images(images=st_result.detach(), fname=f)
-            #     if result is not None:
-            #         tb_writer.add_image(f, result, dataformats='HWC', global_step=epoch)
 
             del x, loss
 
@@ -209,13 +204,15 @@ if __name__ == '__main__':
     parser.add_argument('--source-dir', type=str, default="/home/xuyufeng/dataset/plate_number", help='train images source dir.')
     parser.add_argument('--device', type=str, default='1', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
     parser.add_argument('--epochs', type=int, default=600, help='number of epochs for training.')
-    parser.add_argument('--batch-size', type=int, default=128, help='train batch size.')
-    parser.add_argument('--test-batch-size', type=int, default=-1, help='test batch size(default=batch-size).')
+    parser.add_argument('--batch-size', type=int, default=1024, help='train batch size.')
+    parser.add_argument('--img-size', default=(96, 48), help='the image size')
+    parser.add_argument('--dropout_rate', default=0.5, help='dropout rate.')
+    parser.add_argument('--lpr-max-len', default=18, help='license plate number max length.')
     parser.add_argument('--adam', action='store_true', help='use torch.optim.Adam() optimizer.')
-    parser.add_argument('--lr', type=float, default=.003, help='initial learning rate.')
-    parser.add_argument('--momentum', type=float, default=.9, help='SGD momentum/Adam beta1.')
+    parser.add_argument('--lr', type=float, default=0.003, help='initial learning rate.')
+    parser.add_argument('--momentum', type=float, default=0.9, help='SGD momentum/Adam beta1.')
     parser.add_argument('--weight-decay', type=float, default=1e-5, help='LPRNet optimizer weight decay.')
-    parser.add_argument('--workers', type=int, default=-1, help='maximum number of dataloader workers.')
+    parser.add_argument('--workers', type=int, default=8, help='maximum number of dataloader workers.')
     parser.add_argument('--cache-images', action='store_true', help='cache images for faster training.')
     parser.add_argument('--save-epochs', type=int, default=1, help='number of save interval epochs.')
     parser.add_argument('--test-epochs', type=int, default=1, help='number of test interval epochs.')
@@ -223,27 +220,18 @@ if __name__ == '__main__':
     parser.add_argument('--notest', action='store_true', help='only test final epoch.')
     parser.add_argument('--float-test', action='store_true', help='use float model run test.')
     parser.add_argument('--worker-dir', type=str, default='runs', help='worker dir.')
-    parser.add_argument('--tb-st', action='store_true', help='tensorboard save STNet output.')
     args = parser.parse_args()
 
-    # 自动调整的参数
-    if args.workers < 0:
-        if args.cache_images:
-            args.workers = 1
-        else:
-            args.workers = os.cpu_count()
-    args.workers = min(os.cpu_count(), args.workers)
-
-    if args.test_batch_size < 0:
-        args.test_batch_size = args.batch_size
+    # # 自动调整的参数
+    # if args.workers < 0:
+    #     if args.cache_images:
+    #         args.workers = 1
+    #     else:
+    #         args.workers = os.cpu_count()
+    # args.workers = min(os.cpu_count(), args.workers)
 
     # 打印参数
     logger.info("args: %s" % args)
-
-    # 预定义的参数(不打印)
-    args.img_size = (94, 24)
-    args.lpr_max_len = 9 * 2  # 车牌最大位数 * 2
-    args.lpr_dropout_rate = .5
 
     # 自动调整的参数(不打印)
     args.cache_dir = os.path.join(args.worker_dir, 'cache')

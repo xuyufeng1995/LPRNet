@@ -7,7 +7,7 @@ import torch
 
 from model.lprnet import LPRNet, CHARS
 from model.stnet import STNet
-from utils.general import set_logging, MultiModelWrapper
+from utils.general import set_logging
 
 logger = logging.getLogger(__name__)
 set_logging()
@@ -15,42 +15,31 @@ set_logging()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--weights', type=str, default='./yolov5s.pt', help='weights path')  # from yolov5/models/
+    parser.add_argument('--weights', type=str, default='runs/exp5/weights/best.pt', help='weights path')
     parser.add_argument('--batch-size', type=int, default=1, help='batch size')
+    parser.add_argument('--img-size', default=(96, 48), help='the image size')
+    parser.add_argument('--dropout_rate', default=0.5, help='dropout rate.')
     opts = parser.parse_args()
-    del parser
 
     # 打印参数
     logger.info("args: %s" % opts)
-
-    # 预定义的参数(不打印)
-    opts.img_size = (94, 24)
-    opts.lpr_dropout_rate = .5
 
     # Input
     img = torch.zeros((opts.batch_size, 3, opts.img_size[1], opts.img_size[0]))
 
     # 定义网络
     device = torch.device('cpu')
-    stnet = STNet()
-    lprnet = LPRNet(class_num=len(CHARS), dropout_rate=opts.lpr_dropout_rate)
+    model = LPRNet(class_num=len(CHARS), dropout_rate=opts.dropout_rate)
     logger.info("Build network is successful.")
 
     # Load weights
     ckpt = torch.load(opts.weights, map_location=device)
 
     # 加载网络
-    if 'stn' in ckpt:  # 兼容旧的保存格式
-        stnet.load_state_dict(ckpt["stn"])
-    else:
-        stnet.load_state_dict(ckpt["st"])
-    lprnet.load_state_dict(ckpt["lpr"])
+    model.load_state_dict(ckpt["model"])
 
     # 释放内存
     del ckpt
-
-    # 组合模型
-    model = MultiModelWrapper([stnet, lprnet])
 
     # Update model
     for k, m in model.named_modules():

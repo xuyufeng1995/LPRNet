@@ -19,7 +19,7 @@ class STNet(nn.Module):
                 )
 
         self.fc_loc = nn.Sequential(
-                nn.Linear(32 * 14 * 2, 32),
+                nn.Linear(32 * 14 * 6, 32),
                 nn.ReLU(True),
                 nn.Linear(32, 3 * 2)
                 )
@@ -29,7 +29,7 @@ class STNet(nn.Module):
         
     def forward(self, x):
         xs = self.localization(x)
-        xs = xs.view(-1, 32 * 14 * 2)
+        xs = xs.view(-1, 32 * 14 * 6)
         theta = self.fc_loc(xs)
         theta = theta.view(-1, 2, 3)
 

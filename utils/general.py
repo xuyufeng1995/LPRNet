@@ -134,16 +134,16 @@ def decode(preds):
     return labels, pred_labels
 
 
-class MultiModelWrapper(torch.nn.ModuleList):
-    def __init__(self, models):
-        super(MultiModelWrapper, self).__init__()
-        for i, model in enumerate(models):
-            self.append(model)
-
-    def forward(self, x):
-        for module in self:
-            x = module(x)
-        return x
+# class MultiModelWrapper(torch.nn.ModuleList):
+#     def __init__(self, models):
+#         super(MultiModelWrapper, self).__init__()
+#         for i, model in enumerate(models):
+#             self.append(model)
+#
+#     def forward(self, x):
+#         for module in self:
+#             x = module(x)
+#         return x
 
 
 def sparse_tuple_for_ctc(lpr_max_len, lengths):
