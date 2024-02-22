@@ -21,8 +21,9 @@ class CCPD(ImageDataset):
             with open(source_dir) as f:
                 for line in f.read().strip().splitlines():
                     img_path, label = line.split("\t")
-                    if (len(label) == 8 and label[2] in ["D", "F"]) or len(label) == 7:
-                        self.im_files.append(Img(img_path, label))
+                    filepath = os.path.join(os.path.dirname(source_dir), img_path)
+                    # if (len(label) == 8 and label[2] in ["D", "F"]) or len(label) == 7:
+                    self.im_files.append(Img(filepath, label))
         else:
             for filename in os.listdir(source_dir):
                 filepath = os.path.join(source_dir, filename)
@@ -47,12 +48,12 @@ class CCPD(ImageDataset):
         if len(img_name_split) >= 2:
             # 获得车牌部分
             number = img_name_split[1]
-            if (len(number) == 8 and number[2] in ["D", "F"]) or len(number) == 7:
-                return Img(img_path, number)
+            # if (len(number) == 8 and number[2] in ["D", "F"]) or len(number) == 7:
+            return Img(img_path, number)
 
         return None
 
 def load_dataset(source_dir, cache_dir, img_size):
-    train_dataset = LPRDataSet(CCPD(os.path.join(source_dir, "train"), cache_dir), img_size)
-    test_dataset = LPRDataSet(CCPD(os.path.join(source_dir, "val"), cache_dir), img_size)
+    train_dataset = LPRDataSet(CCPD(os.path.join(source_dir, "train.txt"), cache_dir), img_size)
+    test_dataset = LPRDataSet(CCPD(os.path.join(source_dir, "test.txt"), cache_dir), img_size)
     return train_dataset, test_dataset

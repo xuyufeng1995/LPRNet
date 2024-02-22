@@ -140,9 +140,9 @@ def main(opts):
             pbar.set_description('Train(%d/%d), lr: %.5f, mloss: %.5f' % (epoch, epochs, lr, mloss))
 
             # tb
-            if epoch <= 3 and i < 3:
-                if epoch == 1 and i == 0:
-                    tb_writer.add_graph(model(imgs))  # add model to tensorboard
+            if epoch - start_epoch <= 3 and i < 3:
+                if epoch == start_epoch and i == 0:
+                    tb_writer.add_graph(model, imgs)  # add model to tensorboard
 
                 f = os.path.join(opts.out_dir, 'train_batch_%d_%d.jpg' % (epoch, i))  # filename
                 result = plot_images(images=imgs, fname=f)
@@ -199,9 +199,9 @@ def main(opts):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='STNet & LPRNet Training')
-    parser.add_argument('--weights', type=str, default='', help='initial weights path.')
-    parser.add_argument('--source-dir', type=str, default="/home/xuyufeng/dataset/plate_number", help='train images source dir.')
+    parser = argparse.ArgumentParser(description='LPRNet Training')
+    parser.add_argument('--weights', type=str, default='runs/exp1/weights/best.pt', help='initial weights path.')
+    parser.add_argument('--source-dir', type=str, default="/home/hejingyi/dataset/licence_plate/", help='train images source dir.')
     parser.add_argument('--device', type=str, default='1', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
     parser.add_argument('--epochs', type=int, default=600, help='number of epochs for training.')
     parser.add_argument('--batch-size', type=int, default=1024, help='train batch size.')
@@ -241,6 +241,8 @@ if __name__ == '__main__':
     # 参数处理后的初始化工作
     os.makedirs(args.cache_dir, exist_ok=True)
     os.makedirs(args.weights_dir, exist_ok=True)
+
+    logger.info("Logging results to %s" % args.out_dir)
 
     # 开始训练
     main(args)

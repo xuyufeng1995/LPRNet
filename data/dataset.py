@@ -1,7 +1,8 @@
 import logging
 import random
 import time
-
+import operator
+import functools
 import cv2
 import numpy as np
 import torch
@@ -54,6 +55,6 @@ class LPRDataSet(Dataset):
     @staticmethod
     def collate_fn(batch):
         images, labels, lengths = zip(*batch)
-        labels = np.asarray(labels).flatten()
+        labels = functools.reduce(operator.concat, labels)
 
-        return torch.stack(images, 0), torch.from_numpy(labels), lengths
+        return torch.stack(images, 0), torch.tensor(labels), lengths

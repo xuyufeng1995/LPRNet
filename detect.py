@@ -3,7 +3,7 @@
 import argparse
 import logging
 import os
-import random
+import cv2
 
 import numpy as np
 import torch
@@ -66,67 +66,63 @@ def test(model, data_loader, dataset, device, ctc_loss, lpr_max_len, float_test=
     return mloss, acc
 
 
+def load_image(file, img_size):
+    image = cv2.imread(file)
+
+    # 缩放
+    image = cv2.resize(image, img_size)[:, :, ::-1]
+
+    # 归一化
+    image = (image.astype('float32') - 127.5) * 0.007843
+
+    # to tensor
+    image = torch.from_numpy(image.transpose((2, 0, 1))).contiguous()
+
+    return image
+
+
 def main(opts):
     # 选择设备
     device = torch.device("cuda:0" if (not opts.cpu and torch.cuda.is_available()) else "cpu")
-    cuda = device.type != 'cpu'
     logger.info('Use device %s.' % device)
 
     # 定义网络
     model = LPRNet(class_num=len(CHARS), dropout_rate=opts.dropout_rate).to(device)
     logger.info("Build network is successful.")
 
-    # 损失函数
-    ctc_loss = torch.nn.CTCLoss(blank=len(CHARS) - 1, reduction='mean')  # reduction: 'none' | 'mean' | 'sum'
-
     # Load weights
     ckpt = torch.load(opts.weights, map_location=device)
 
     # 加载网络
     model.load_state_dict(ckpt["model"])
-
-    # 释放内存
-    del ckpt
+    model.eval()
 
     # Print
     logger.info('Load weights completed.')
 
-    # 加载数据
-    _, test_dataset = load_dataset(args.source_dir, args.cache_dir, opts.img_size)
-    test_loader = DataLoader(test_dataset, batch_size=opts.batch_size, shuffle=False, num_workers=opts.workers,
-                             pin_memory=cuda, collate_fn=test_dataset.collate_fn)
+    for name in os.listdir(opts.source_dir):
+        filepath = os.path.join(opts.source_dir, name)
+        image = load_image(filepath, opts.img_size).unsqueeze(0).to(device)
 
-    logger.info('Image sizes %d test' % (len(test_dataset)))
-    logger.info('Using %d dataloader workers' % opts.workers)
+        with torch.no_grad():
+            x = model(image).cpu().detach().numpy()
+            pred_labels, _ = decode(x)
 
-    model.eval()
-    test(model, test_loader, test_dataset, device, ctc_loss, opts.lpr_max_len, opts.float_test)
+        logger.info('{} ------> {}'.format(name, pred_labels))
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='STNet & LPRNet Testing')
-    parser.add_argument('--source-dir',       type=str,            default="/home/hejingyi/dataset/licence_plate/",      help='train images source dir.')
-    parser.add_argument('--weights',          type=str,            default="runs/exp6/weights/best.pt",     help='initial weights path.')
+    parser = argparse.ArgumentParser(description='LPRNet detecting')
+    parser.add_argument('--source-dir', type=str, default="figures", help='train images source dir.')
+    parser.add_argument('--weights', type=str, default="runs/exp6/weights/best.pt", help='initial weights path.')
     parser.add_argument('--img-size', default=(96, 48), help='the image size')
-    parser.add_argument('--cpu',              action='store_true',                    help='force use cpu.')
-    parser.add_argument('--batch-size',       type=int,            default=1024,       help='train batch size.')
     parser.add_argument('--dropout_rate', default=0.5, help='dropout rate.')
+    parser.add_argument('--cpu', action='store_true', help='force use cpu.')
     parser.add_argument('--lpr-max-len', default=18, help='license plate number max length.')
-    parser.add_argument('--float-test',       action='store_true',                    help='use float model run test.')
-    parser.add_argument('--workers',          type=int,            default=8,        help='maximum number of dataloader workers.')
-    parser.add_argument('--worker-dir',       type=str,            default='runs',    help='worker dir.')
-
     args = parser.parse_args()
-    del parser
 
     # 打印参数
     logger.info("args: %s" % args)
-
-    # 自动调整的参数(不打印)
-    args.cache_dir = os.path.join(args.worker_dir, 'cache')
-
-    # 参数处理后的初始化工作
-    os.makedirs(args.cache_dir, exist_ok=True)
 
     # 开始训练
     main(args)
